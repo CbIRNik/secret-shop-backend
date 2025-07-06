@@ -1,4 +1,4 @@
-import { Injectable, UnauthorizedException } from '@nestjs/common';
+import { HttpException, Injectable } from '@nestjs/common';
 import { ConfigService } from '@nestjs/config';
 import { InjectRepository } from '@nestjs/typeorm';
 import { JwtService } from '@nestjs/jwt';
@@ -26,23 +26,29 @@ export class AuthService {
 			client_secret=${clientSecret}&
 			code=${code}`
 		const authResponse = await fetch(url, {
-			method: "GET",
+			method: "get",
 			headers: {
     		Accept: "application/json",
       	"Accept-Encoding": "application/json",
 			},
 		})
+    if (!authResponse.ok) {
+      throw new HttpException("Authentication failed. Please try again.", 401)
+    }
 		const githubUserData = await authResponse.json()
 		const accessToken = githubUserData.access_token
     const profileResponse = await fetch(this.githubApiUrl, {
-			method: "get",
-			headers: {
-				Authorization: `Bearer ${accessToken}`,
-			},
-		})
+      method: "get",
+      headers: {
+        Authorization: `Bearer ${accessToken}`,
+      },
+    })
+    if (!profileResponse.ok) {
+      throw new HttpException("Failed to get yout profile. Please try again", 401)
+    }
 		const profile = await profileResponse.json()
     if (!profile) {
-      throw new UnauthorizedException("Invalid github code")
+      throw new HttpException("Invalid github code", 401)
     }
     const user = await this.userRepository
       .createQueryBuilder('user')
@@ -80,6 +86,9 @@ export class AuthService {
 				redirect_uri: callbackUrl,
 			})
 		})
+    if (!authResponse.ok) {
+      throw new HttpException("Authentication failed. Please try again.", 401)
+    }
 		const { id_token: accessToken } = await authResponse.json()
 		const ticket = await this.OAuthClient.verifyIdToken({
 			idToken: accessToken,
